@@ -1,0 +1,1 @@
+My attempt to learn Rust finally. I'm not sure the solutions are good, but I'm at least trying to make them work.
