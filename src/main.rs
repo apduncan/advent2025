@@ -1,5 +1,6 @@
-use std::{collections::{HashMap, HashSet}, fs::{self}};
+use std::{collections::{HashMap, HashSet}, fs::{self}, ops::Index};
 
+use itertools::Itertools;
 use regex::Regex;
 
 fn main() {
@@ -19,6 +20,8 @@ fn main() {
     day_four_puzzle_one("inputs/input_4_1.txt");
     println!("Day 4, Puzzle 2");
     day_four_puzzle_two("inputs/input_4_1.txt");
+    println!("Day 5, Puzzle 1");
+    day_five_puzzle_one("inputs/input_5_1.txt");
 }
 
 fn read_input(file_path: &str) -> Vec<String> {
@@ -300,6 +303,60 @@ fn day_four_puzzle_two(file_path: &str) {
             let anti = extract_diagonal(&submat, 2, false);
             let hit: bool = (count_word(&diag, &needle) == 1) & (count_word(&anti, &needle) == 1);
             count += hit as usize;
+        }
+    }
+    println!("{count}");
+}
+
+fn position_valid(page_map: &HashMap<&usize, usize>, rule: (usize, usize)) -> bool {
+    // Check if a rule is valid
+    page_map.get(&rule.0).unwrap() < page_map.get(&rule.1).unwrap()
+}
+
+fn page_order_map(page_order: &Vec<usize>) -> HashMap<&usize, usize> {
+    // Make a hash map of page -> index
+    page_order.into_iter().enumerate().map(|x| (x.1, x.0)).collect()
+}
+
+fn day_five_puzzle_one(file_path: &str) {
+    // Day 5, Puzzle One
+    // Are the page in order?
+
+    let whole_input: Vec<String> = read_input(file_path);
+    let mut rules: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+    let mut is_manuals: bool = false;
+    let mut count: usize = 0;
+    for line in whole_input {
+        // Blank line indicates switch from rule definition to manuals to check
+        if line.len() == 0 {
+            is_manuals = true;
+            continue;
+        }
+        if !is_manuals {
+            // Add rules to our HashMap
+            let nums: Vec<usize> = line.split("|").map(|x| x.parse::<usize>().unwrap()).collect();
+            let (a, b) = (nums.get(0).unwrap(), nums.get(1).unwrap());
+            if !rules.contains_key(a) {rules.insert(*a, Vec::new());}
+            if !rules.contains_key(b) {rules.insert(*b, Vec::new());}
+            rules.get_mut(a).unwrap().push((*a, *b));
+            rules.get_mut(b).unwrap().push((*a, *b));
+        } else {
+            // Convert manual string to vector of integers
+            let page_order: Vec<usize> = line.split(",").map(|x| x.parse::<usize>().unwrap()).collect();
+            let page_map = page_order_map(&page_order);
+            // Get all the rules we should be concerned with
+            let rules: Vec<&(usize, usize)> = page_order.iter()
+                .map(|x| rules.get(&x).unwrap())
+                .flatten()
+                .filter(|x| page_map.contains_key(&x.0) & page_map.contains_key(&x.1))
+                .unique()
+                .collect();
+            // Check all relevant rules are valid
+            let all_valid = rules.iter().all(|x| position_valid(&page_map, **x));
+            if all_valid {
+                let middle: usize = page_order.len() / 2;
+                count += page_order.get(middle).unwrap();
+            }
         }
     }
     println!("{count}");
