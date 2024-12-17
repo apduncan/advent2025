@@ -20,8 +20,10 @@ fn main() {
     day_four_puzzle_one("inputs/input_4_1.txt");
     println!("Day 4, Puzzle 2");
     day_four_puzzle_two("inputs/input_4_1.txt");
-    println!("Day 5, Puzzle 1");
+    println!("Day 5, Puzzle 1 & 2");
     day_five_puzzle_one("inputs/input_5_1.txt");
+    println!("Day 6, Puzzle 1");
+    day_six_puzzle_one("inputs/input_6_1.txt");
 }
 
 fn read_input(file_path: &str) -> Vec<String> {
@@ -318,14 +320,48 @@ fn page_order_map(page_order: &Vec<usize>) -> HashMap<&usize, usize> {
     page_order.into_iter().enumerate().map(|x| (x.1, x.0)).collect()
 }
 
+fn weird_bubble(page_order: &Vec<usize>, rules: &Vec<&(usize, usize)>) -> Vec<usize> {
+    // Bubble sort where we allow only some pairs to have a known ordering
+    // I think there isn't actually a guarantee that bubble will work if some pairs
+    // lack an associated rule. 
+    let mut new_order: Vec<usize> = page_order.clone();
+    loop {
+        let mut swap: bool = false;
+        for i in 0..new_order.len() - 1 {
+            let (a, b) = (new_order[i], new_order[i+1]);
+            match rules
+                .iter()
+                .filter(|x| ((x.0 == a) | (x.0 == b)) && ((x.1 == a) | (x.1 == b)))
+                .next() {
+                    None => {
+                        continue;
+                    },
+                    Some(&order) => {
+                        if a != order.0 {
+                            new_order[i] = b;
+                            new_order[i + 1] = a;
+                            swap = true;
+                        }
+                    }
+                }
+        }
+        if !swap {
+            break;
+        }
+    }
+    new_order
+} 
+
 fn day_five_puzzle_one(file_path: &str) {
     // Day 5, Puzzle One
     // Are the page in order?
+    // The bubble sort I think isn't guaranteed to work, but it does for the input given
 
     let whole_input: Vec<String> = read_input(file_path);
     let mut rules: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
     let mut is_manuals: bool = false;
     let mut count: usize = 0;
+    let mut p2_count: usize = 0;
     for line in whole_input {
         // Blank line indicates switch from rule definition to manuals to check
         if line.len() == 0 {
@@ -353,11 +389,153 @@ fn day_five_puzzle_one(file_path: &str) {
                 .collect();
             // Check all relevant rules are valid
             let all_valid = rules.iter().all(|x| position_valid(&page_map, **x));
+            let middle: usize = page_order.len() / 2;
             if all_valid {
-                let middle: usize = page_order.len() / 2;
                 count += page_order.get(middle).unwrap();
+            } else {
+                // Sort and add to part 2 only count
+                let reordered = weird_bubble(&page_order, &rules);
+                p2_count += reordered.get(middle).unwrap();
             }
         }
     }
-    println!("{count}");
+    println!("Part One: {count}");
+    println!("Part Two: {p2_count}");
+}
+
+struct Guard {
+    x: i32,
+    y: i32,
+    direction: Direction,
+    path: Vec<(i32, i32, Direction)>
+}
+
+impl Guard {
+    fn move_guard(&mut self, board: &Vec<Vec<bool>>) -> bool {
+        // Move a guard on a board, and return true if they have left
+        let y_max: i32 = (board.len() as i32) - 1;
+        let x_max: i32 = (board[0].len() as i32) - 1;
+        let move_inc: (i32, i32) = self.direction.value();
+        let next: (i32, i32) = (self.x + move_inc.0, self.y + move_inc.1);
+        // Check if moved off board
+        if (next.1 > y_max) | (next.1 < 0) | (next.0 > x_max) | (next.0 < 0) {
+            return true;
+        }
+        // Check if obstacle & just turn if so
+        let obstacle: bool = board[next.1 as usize][next.0 as usize];
+        if obstacle {
+            self.direction = self.direction.turn();
+        } else {
+            self.x = next.0;
+            self.y = next.1;
+        }
+        self.path.push((self.x, self.y, self.direction));
+        return false;
+    }
+}
+
+
+#[derive(Clone, Copy)]
+enum Direction {
+    NORTH,
+    EAST,
+    SOUTH,
+    WEST
+}
+
+impl Direction {
+    fn value(&self) -> (i32, i32) {
+        match *self {
+            Direction::NORTH => (0, -1),
+            Direction::EAST => (1, 0),
+            Direction::SOUTH => (0, 1),
+            Direction::WEST => (-1, 0)
+        }
+    }
+
+    fn turn(&self) -> Direction {
+        match *self {
+            Direction::EAST => Direction::SOUTH,
+            Direction::NORTH => Direction::EAST,
+            Direction::SOUTH => Direction::WEST,
+            Direction::WEST => Direction::NORTH
+        }
+    }
+}
+
+fn day_six_puzzle_one(file_path: &str) {
+    // Guard moves in a straight line until it hits an obstacle, then turns.
+    // Learning to use structs / enums
+
+    let lines = read_input(&file_path);
+    let mut board: Vec<Vec<bool>> = Vec::new();
+    let mut guard = Guard {
+        x: 0,
+        y: 0,
+        direction: Direction::NORTH,
+        path: Vec::new()
+    };
+
+    // Initialise board
+    for (y, line) in lines.into_iter().enumerate() {
+        board.push(Vec::new());
+        for (x, char) in line.as_bytes().iter().map(|x| *x as char).enumerate() {
+            match char {
+                '#' => board[y].push(true),
+                '.' => board[y].push(false),
+                '^' => {
+                    board[y].push(false);
+                    guard = Guard {
+                        x: x as i32,
+                        y: y as i32,
+                        direction: Direction::NORTH,
+                        path: Vec::new()
+                    };
+                },
+                '>' => {
+                    board[y].push(false);
+                    guard = Guard {
+                        x: x as i32,
+                        y: y as i32,
+                        direction: Direction::EAST,
+                        path: Vec::new()
+                    };
+                },
+                'V' => {
+                    board[y].push(false);
+                    guard = Guard {
+                        x: x as i32,
+                        y: y as i32,
+                        direction: Direction::SOUTH,
+                        path: Vec::new()
+                    };
+                },
+                '<' => {
+                    board[y].push(false);
+                    guard = Guard {
+                        x: x as i32,
+                        y: y as i32,
+                        direction: Direction::WEST,
+                        path: Vec::new()
+                    };
+                },
+                _ => {
+                    panic!("Unrecognised character")
+                }
+            }
+        }
+    }
+    // Add initial guard position to the path
+    guard.path.push((guard.x, guard.y, guard.direction));
+
+    // Move the guard about until finished
+    loop {
+        let off_board = guard.move_guard(&board);
+        if off_board {break;}
+    }
+
+    // Count distinct positions
+    let distinct: HashSet<(i32, i32)> = guard.path.iter().map(|x| (x.0, x.1)).collect();
+    let distinct_count: usize = distinct.len();
+    println!("{distinct_count}");
 }
